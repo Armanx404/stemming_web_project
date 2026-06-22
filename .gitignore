@@ -1,0 +1,23 @@
+# Dependency folder
+node_modules/
+
+# Environment variables
+.env
+.env.example
+
+# Log files
+*.log
+
+# macOS system files
+.DS_Store
+
+# Build folder
+build/
+dist/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+Thumbs.db
