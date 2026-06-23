@@ -1,13 +1,15 @@
-import express from "express";
+'use strict';
 
-const router = express.Router();
+import { Router } from 'express';
 
-router.get("/health", (req, res) => {
+const router = Router();
+
+router.get('/', (_req, res) => {
   res.status(200).json({
     success: true,
-    message: "Service is healthy",
+    message: 'Service is healthy',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || "development"
+    environment: process.env.NODE_ENV || 'development',
   });
 });
 

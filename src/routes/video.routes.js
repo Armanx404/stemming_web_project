@@ -18,7 +18,12 @@ import { asyncHandler } from '../middleware/asyncHandler.middleware.js';
 import { protect, requireOwner } from '../middleware/auth.middleware.js';
 import { cache } from '../middleware/cache.middleware.js';
 import VideoModel from '../models/video.model.js';
-import videoController from '../controllers/video.controller.js';
+import {
+  deleteVideo,
+  getAllVideos,
+  getVideoById,
+  uploadVideo,
+} from '../controllers/video.controller.js';
 
 const router = Router();
 
@@ -27,25 +32,25 @@ router.post(
   '/upload',
   protect,
   uploadFields,
-  asyncHandler(videoController.uploadVideo)
+  asyncHandler(uploadVideo)
 );
 
 // GET /api/videos — Public, Redis cached
 router.get(
   '/',
   cache('videos-list', 300),   // 5-minute cache
-  asyncHandler(videoController.getAllVideos)
+  asyncHandler(getAllVideos)
 );
 
 // GET /api/videos/:id — Public
-router.get('/:id', asyncHandler(videoController.getVideoById));
+router.get('/:id', asyncHandler(getVideoById));
 
 // DELETE /api/videos/:id — Auth + Ownership required
 router.delete(
   '/:id',
   protect,
   requireOwner(VideoModel, 'uploadedBy'),
-  asyncHandler(videoController.deleteVideo)
+  asyncHandler(deleteVideo)
 );
 
 export default router;

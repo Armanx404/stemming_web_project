@@ -3,7 +3,6 @@
  *
  * WHY THIS FILE CHANGED:
  *   Two targeted changes only — no logic, validation, or flow changes:
- *     1. Import source: ../config/s3.config → ../config/storage.config
  *     2. Import name:   createS3Storage     → createStorageEngine
  *
  *   The entire external API of this module (uploadFields) is unchanged.
@@ -24,7 +23,6 @@
  *
  * ROLLBACK STRATEGY:
  *   Change the two import lines back to:
- *     const { createS3Storage } = require('../config/s3.config');
  *     storage: createS3Storage((r) => r.videoId),
  *
  * UPLOAD FLOW (unchanged):

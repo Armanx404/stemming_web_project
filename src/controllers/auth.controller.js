@@ -19,7 +19,12 @@
 'use strict';
 
 import { StatusCodes } from 'http-status-codes';
-import authService from '../services/auth.service.js';
+import {
+  login as loginService,
+  logout as logoutService,
+  refresh as refreshService,
+  register as registerService,
+} from '../services/auth.service.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 
 // ─── Cookie Config ────────────────────────────────────────────────────────────
@@ -55,7 +60,7 @@ const register = async (req, res) => {
       .json(errorResponse('username, email, and password are all required.'));
   }
 
-  const { user, accessToken, refreshToken } = await authService.register({
+  const { user, accessToken, refreshToken } = await registerService({
     username: username.trim(),
     email: email.trim().toLowerCase(),
     password, // do NOT trim passwords — spaces can be intentional
@@ -88,7 +93,7 @@ const login = async (req, res) => {
       .json(errorResponse('Email and password are required.'));
   }
 
-  const { user, accessToken, refreshToken } = await authService.login({
+  const { user, accessToken, refreshToken } = await loginService({
     email: email.trim().toLowerCase(),
     password, // do NOT trim passwords
   });
@@ -121,7 +126,7 @@ const refresh = async (req, res) => {
       .json(errorResponse('Refresh token is required. Provide it in the cookie or request body.'));
   }
 
-  const { accessToken, refreshToken } = await authService.refresh(token);
+  const { accessToken, refreshToken } = await refreshService(token);
 
   res.cookie('refreshToken', refreshToken, refreshCookieOptions());
 
@@ -139,7 +144,7 @@ const refresh = async (req, res) => {
  * Clears the httpOnly cookie and nullifies the stored refresh token hash in DB.
  */
 const logout = async (req, res) => {
-  await authService.logout(req.user.id);
+  await logoutService(req.user.id);
 
   res.clearCookie('refreshToken', {
     httpOnly: true,

@@ -3,10 +3,8 @@
  *
  * WHY THIS FILE CHANGED:
  *   1. Import source change:
- *        ../config/s3.config → ../config/storage.config
  *        s3Client            → storageClient
  *   2. Import source change:
- *        ../config/cloudfront.config → ../config/cdn.config
  *        buildSignedUrl              → buildSignedUrl (same name, now ASYNC)
  *   3. Queue payload field rename:
  *        s3Key → objectKey  in the enqueueVideoProcessing call
@@ -14,7 +12,6 @@
  *        buildSignedUrl is now an async function (presigned URL via R2 SDK).
  *        All three call sites in createVideo and getVideoById must `await` it.
  *   5. Env var rename:
- *        process.env.S3_BUCKET_NAME → process.env.STORAGE_BUCKET_NAME
  *   6. Local variable renames (vendor-agnostic, not DB field names):
  *        s3Key (local var) → objectKey
  *        thumbnailS3Key    → thumbnailObjectKey
@@ -36,14 +33,11 @@
  *      field name directly here is correct — do not rename to video.objectKey.
  *   3. deleteVideo — uses storageClient (renamed from s3Client). The
  *      DeleteObjectCommand is SDK-compatible with R2's S3 API unchanged.
- *   4. S3_BUCKET_NAME → STORAGE_BUCKET_NAME in DeleteObjectCommand to match
  *      the new env var convention.
  *
  * ROLLBACK STRATEGY:
- *   Revert import paths to s3.config and cloudfront.config. Remove `await`
  *   from the three buildSignedUrl call sites. Rename objectKey → s3Key in
  *   local vars and the enqueueVideoProcessing call. Revert STORAGE_BUCKET_NAME
- *   → S3_BUCKET_NAME in the delete operation.
  *
  * SYSTEMS UNCHANGED:
  *   - getAllVideos (no storage interaction)

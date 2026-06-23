@@ -36,7 +36,7 @@
 'use strict';
 
 import { Queue } from 'bullmq';
-import { getRedisClient } from '../config/redis.config.js';
+import { createBullMQConnection } from '../config/redis.config.js';
 import logger from '../utils/logger.js';
 
 // STABLE — do not rename. Changing this orphans all existing Redis jobs.
@@ -44,12 +44,14 @@ const QUEUE_NAME = 'video-processing';
 
 // Lazy-initialised queue instance (created on first enqueue, not at module load).
 let videoQueue = null;
+let videoQueueConnection = null;
 
 function getVideoQueue() {
   if (videoQueue) return videoQueue;
 
+  videoQueueConnection = createBullMQConnection('video-queue');
   videoQueue = new Queue(QUEUE_NAME, {
-    connection: getRedisClient(),
+    connection: videoQueueConnection,
     defaultJobOptions: {
       // Retry up to 3 times with exponential backoff before moving to failed set.
       attempts: 3,

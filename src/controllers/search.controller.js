@@ -1,53 +1,23 @@
-import Video from '../models/video.model.js';
+'use strict';
 
-import redisClient from '../config/redis.js';
+import { StatusCodes } from 'http-status-codes';
+import { searchVideos as searchVideosService } from '../services/search.service.js';
+import { successResponse } from '../utils/response.js';
 
-export const searchVideos = async (req, res) => {
-  try {
-    const query = req.query.q;
+const searchVideos = async (req, res) => {
+  const { q, page, limit } = req.query;
+  const result = await searchVideosService({ query: q, page, limit });
+  const response = successResponse(
+    'Search results retrieved successfully.',
+    result.data,
+    result.pagination
+  );
 
-    if (!query) {
-      return res.status(400).json({
-        success: false,
-        message: "Search query (q) is required",
-      });
-    }
+  response.query = result.query;
 
-    const cacheKey = `search:${query}`;
+  return res.status(StatusCodes.OK).json(response);
+};
 
-    // 🔥 1. Check Redis Cache
-    if (redisClient) {
-      const cached = await redisClient.get(cacheKey);
-      if (cached) {
-        return res.json({
-          success: true,
-          source: "cache",
-          data: JSON.parse(cached),
-        });
-      }
-    }
-
-    // 🔎 2. DB Search (case-insensitive)
-    const videos = await Video.find({
-      title: { $regex: query, $options: "i" },
-    }).sort({ createdAt: -1 });
-
-    // 🔥 3. Store in Redis (60 sec)
-    if (redisClient) {
-      await redisClient.setEx(cacheKey, 60, JSON.stringify(videos));
-    }
-
-    return res.json({
-      success: true,
-      source: "database",
-      results: videos.length,
-      data: videos,
-    });
-  } catch (error) {
-    console.error("Search Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server Error",
-    });
-  }
+export {
+  searchVideos
 };

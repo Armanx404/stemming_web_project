@@ -11,7 +11,12 @@
 
 import mongoose from 'mongoose';
 import { StatusCodes } from 'http-status-codes';
-import videoService from '../services/video.service.js';
+import {
+  createVideo as createVideoService,
+  deleteVideo as deleteVideoService,
+  getAllVideos as getAllVideosService,
+  getVideoById as getVideoByIdService,
+} from '../services/video.service.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
@@ -27,7 +32,7 @@ const uploadVideo = async (req, res) => {
   const videoFile     = req.files?.video?.[0] ?? null;
   const thumbnailFile = req.files?.thumbnail?.[0] ?? null;
 
-  const video = await videoService.createVideo(
+  const video = await createVideoService(
     {
       title: title.trim(),
       description: description?.trim() ?? '',
@@ -45,7 +50,7 @@ const uploadVideo = async (req, res) => {
 // GET /api/videos
 const getAllVideos = async (req, res) => {
   const { page, limit, sort } = req.query;
-  const result = await videoService.getAllVideos({ page, limit, sort });
+  const result = await getAllVideosService({ page, limit, sort });
 
   return res.status(StatusCodes.OK).json(
     successResponse('Videos retrieved successfully.', result.data, result.pagination)
@@ -59,14 +64,14 @@ const getVideoById = async (req, res) => {
     return res.status(StatusCodes.BAD_REQUEST).json(errorResponse(`"${id}" is not a valid video ID.`));
   }
 
-  const video = await videoService.getVideoById(id);
+  const video = await getVideoByIdService(id);
   return res.status(StatusCodes.OK).json(successResponse('Video retrieved successfully.', video));
 };
 
 // DELETE /api/videos/:id
 // req.resource is pre-loaded by the requireOwner middleware
 const deleteVideo = async (req, res) => {
-  await videoService.deleteVideo(req.resource);
+  await deleteVideoService(req.resource);
   return res.status(StatusCodes.OK).json(successResponse('Video deleted successfully.'));
 };
 

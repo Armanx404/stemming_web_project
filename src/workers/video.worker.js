@@ -2,16 +2,13 @@
  * src/workers/video.worker.js — FFmpeg HLS Transcoding Worker (R2 Migration)
  *
  * WHY THIS FILE CHANGED:
- *   1. Import source:  ../config/s3.config       → ../config/storage.config
  *      Import name:   s3Client                   → storageClient
- *   2. Import source:  ../config/cloudfront.config → ../config/cdn.config
  *      (buildHlsSignedUrl, buildThumbnailUrl same names)
  *   3. ACL REMOVED from uploadObject (formerly uploadToS3):
  *      PutObjectCommand no longer includes `ACL: 'private'`.
  *      R2 rejects any request with an ACL parameter (HTTP 501 NotImplemented).
  *      This is the single highest-risk line in the entire migration.
  *   4. Env var rename:
- *      process.env.S3_BUCKET_NAME → process.env.STORAGE_BUCKET_NAME
  *   5. Helper function renames (vendor-agnostic):
  *      downloadFromS3       → downloadObject
  *      uploadToS3           → uploadObject
@@ -48,10 +45,8 @@
  *      in the String field — silent data corruption with no thrown error.
  *
  * ROLLBACK STRATEGY:
- *   Revert imports to s3.config / cloudfront.config. Rename helper functions
  *   back. Re-add `ACL: 'private'` to PutObjectCommand. Revert objectKey → s3Key
  *   in job.data destructuring and all downstream references. Remove the legacy
- *   fallback (objectKey ?? s3Key). Revert STORAGE_BUCKET_NAME → S3_BUCKET_NAME.
  *   Remove the await on buildHlsSignedUrl.
  *
  * ARCHITECTURE NOTE (unchanged):
@@ -75,8 +70,7 @@
 
 'use strict';
 
-import dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
 
 import path from 'path';
 import fs from 'fs';
@@ -85,11 +79,13 @@ import { Worker } from 'bullmq';
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import ffmpeg from 'fluent-ffmpeg';
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+import ffprobeInstaller from '@ffprobe-installer/ffprobe';
 const ffmpegPath = ffmpegInstaller.path;
+const ffprobePath = ffprobeInstaller.path;
 import mongoose from 'mongoose';
 
 // ─── R2-migrated imports ──────────────────────────────────────────────────────
-import { getRedisClient } from '../config/redis.config.js';
+import { createBullMQConnection } from '../config/redis.config.js';
 import { storageClient, getHlsKeyPrefix, getThumbnailKey } from '../config/storage.config.js';
 import { buildHlsSignedUrl, buildThumbnailUrl } from '../config/cdn.config.js';
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,6 +96,7 @@ import logger from '../utils/logger.js';
 import { QUEUE_NAME } from '../queues/video.queue.js';
 
 ffmpeg.setFfmpegPath(ffmpegPath);
+ffmpeg.setFfprobePath(ffprobePath);
 
 // ─── HLS Rendition Configuration ─────────────────────────────────────────────
 // Unchanged from Phase 2. Each rendition produces a separate .m3u8 playlist
@@ -399,7 +396,7 @@ async function startWorker() {
   await connectDB();
 
   const worker = new Worker(QUEUE_NAME, processVideo, {
-    connection:  getRedisClient(),
+    connection:  createBullMQConnection('video-worker'),
     concurrency: 2, // Two videos transcoded simultaneously per worker process.
                     // Scale horizontally by launching additional worker instances.
   });

@@ -13,14 +13,20 @@
 import { Router } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler.middleware.js';
 import { protect } from '../middleware/auth.middleware.js';
-import authController from '../controllers/auth.controller.js';
+import {
+  login,
+  logout,
+  me,
+  refresh,
+  register,
+} from '../controllers/auth.controller.js';
 
 const router = Router();
 
-router.post('/register', asyncHandler(authController.register));
-router.post('/login',    asyncHandler(authController.login));
-router.post('/refresh',  asyncHandler(authController.refresh));
-router.post('/logout',   protect, asyncHandler(authController.logout));
-router.get('/me',        protect, asyncHandler(authController.me));
+router.post('/register', asyncHandler(register));
+router.post('/login',    asyncHandler(login));
+router.post('/refresh',  asyncHandler(refresh));
+router.post('/logout',   protect, asyncHandler(logout));
+router.get('/me',        protect, asyncHandler(me));
 
 export default router;

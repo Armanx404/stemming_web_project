@@ -6,7 +6,7 @@
  *   - Auth routes added: /auth
  *   - Search routes added: /api/search
  *   - Cookie parser added (for httpOnly refresh token)
- *   - Static file serving removed (files now served via CloudFront)
+ *   - Static file serving removed (files now served via R2 delivery URLs)
  */
 
 'use strict';
@@ -17,12 +17,12 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
-import { RedisStore } from 'rate-limit-redis';
 
-import { getRedisClient } from './config/redis.config.js';
+import { createRedisRateLimitStore } from './config/redis.config.js';
 import videoRoutes from './routes/video.routes.js';
 import authRoutes from './routes/auth.routes.js';
 import searchRoutes from './routes/search.routes.js';
+import healthRoutes from './routes/health.routes.js';
 import { notFoundHandler, globalErrorHandler } from './middleware/error.middleware.js';
 import logger from './utils/logger.js';
 
@@ -43,6 +43,8 @@ app.use(cors({
 
 // ─── Rate Limiting (Redis-backed — works across multiple server instances) ────
 const limiter = rateLimit({
+  store: createRedisRateLimitStore(),
+  passOnStoreError: true,
   windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   max: Number(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
   standardHeaders: true,
@@ -70,6 +72,7 @@ const API_PREFIX = process.env.API_PREFIX || '/api';
 app.use('/auth',              authRoutes);
 app.use(`${API_PREFIX}/videos`, videoRoutes);
 app.use(`${API_PREFIX}/search`, searchRoutes);
+app.use(`${API_PREFIX}/health`, healthRoutes);
 
 // Root status
 app.get('/', (_req, res) => {
@@ -85,16 +88,6 @@ app.get('/', (_req, res) => {
       search:       `GET ${API_PREFIX}/search?q=<term>`,
       health:       `GET ${API_PREFIX}/health`,
     },
-  });
-});
-
-// Health check
-app.get(`${API_PREFIX}/health`, (_req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Service is healthy',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development',
   });
 });
 

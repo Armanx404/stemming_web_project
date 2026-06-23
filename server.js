@@ -14,8 +14,7 @@
 
 'use strict';
 
-import dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
 
 // ─── Required Environment Variable Guard ──────────────────────────────────────
 (function validateEnv() {

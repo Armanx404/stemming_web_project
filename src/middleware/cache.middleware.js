@@ -22,7 +22,7 @@
 
 'use strict';
 
-import { getRedisClient } from '../config/redis.config.js';
+import { connectRedisClient, getRedisClient } from '../config/redis.config.js';
 import logger from '../utils/logger.js';
 
 const DEFAULT_TTL = parseInt(process.env.REDIS_CACHE_TTL_SECONDS, 10) || 300;
@@ -44,6 +44,7 @@ function cache(namespace, ttl = DEFAULT_TTL) {
     const cacheKey = `cache:${namespace}:${sortedQuery}`;
 
     try {
+      await connectRedisClient(redis);
       const cached = await redis.get(cacheKey);
       if (cached) {
         logger.debug(`Cache HIT: ${cacheKey}`);
@@ -91,6 +92,7 @@ async function invalidateCache(namespace) {
   let deleted = 0;
 
   try {
+    await connectRedisClient(redis);
     do {
       const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
       cursor = nextCursor;
