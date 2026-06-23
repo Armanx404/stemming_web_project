@@ -14,7 +14,7 @@
  *
  * Token strategy:
  *   - Access token:  short-lived (7d), stateless JWT. Verified on every request.
- *   - Refresh token: long-lived (30d), stored as a bcrypt hash in MongoDB.
+ *   - Refresh token: long-lived (30d), stored as a keyed hash in MongoDB.
  *     Rotated on each use — prevents replay attacks.
  *     Reuse detection: presenting an old token wipes ALL sessions for that user.
  */
@@ -23,8 +23,12 @@
 
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import UserModel from '../models/user.model.js';
 import logger from '../utils/logger.js';
+
+const JWT_VERIFY_OPTIONS = { algorithms: ['HS256'] };
+const REFRESH_TOKEN_HASH_PATTERN = /^[a-f0-9]{64}$/;
 
 // ─── Startup Guard ────────────────────────────────────────────────────────────
 //
@@ -85,6 +89,27 @@ function buildTokenPayload(user) {
   return { sub: user.id, role: user.role };
 }
 
+function hashRefreshToken(refreshToken) {
+  return createHmac('sha256', process.env.JWT_REFRESH_SECRET)
+    .update(refreshToken)
+    .digest('hex');
+}
+
+async function verifyStoredRefreshToken(incomingRefreshToken, storedRefreshToken) {
+  if (REFRESH_TOKEN_HASH_PATTERN.test(storedRefreshToken)) {
+    const incomingHash = Buffer.from(hashRefreshToken(incomingRefreshToken), 'hex');
+    const storedHash = Buffer.from(storedRefreshToken, 'hex');
+
+    return (
+      incomingHash.length === storedHash.length &&
+      timingSafeEqual(incomingHash, storedHash)
+    );
+  }
+
+  // Backward compatibility for sessions created before HMAC refresh hashes.
+  return bcrypt.compare(incomingRefreshToken, storedRefreshToken);
+}
+
 /**
  * issueTokenPair
  * Generates a new access + refresh token pair, hashes the refresh token,
@@ -93,12 +118,11 @@ function buildTokenPayload(user) {
 async function issueTokenPair(user) {
   const payload = buildTokenPayload(user);
   const accessToken = signAccessToken(payload);
-  const refreshToken = signRefreshToken(payload);
+  const refreshToken = signRefreshToken({ ...payload, jti: randomUUID() });
 
   // Hash the refresh token — raw token never touches the DB.
-  // bcrypt cost 10 is intentionally lower here than password hashing (12)
-  // because this runs on every login/refresh and needs to stay fast.
-  const hashedRefresh = await bcrypt.hash(refreshToken, 10);
+  // JWTs exceed bcrypt's 72-byte input limit, so use a keyed SHA-256 hash.
+  const hashedRefresh = hashRefreshToken(refreshToken);
 
   await UserModel.findByIdAndUpdate(
     user._id,
@@ -120,7 +144,7 @@ async function issueTokenPair(user) {
  */
 async function register({ username, email, password }) {
   const user = await UserModel.create({ username, email, password });
-  logger.info(`User registered: id=${user.id} email=${user.email}`);
+  logger.info(`User registered: id=${user.id}`);
 
   const tokens = await issueTokenPair(user);
   return { user, ...tokens };
@@ -196,13 +220,23 @@ async function refresh(incomingRefreshToken) {
   // Step 1: Verify the token signature and expiry
   let decoded;
   try {
-    decoded = jwt.verify(incomingRefreshToken, process.env.JWT_REFRESH_SECRET);
+    decoded = jwt.verify(
+      incomingRefreshToken,
+      process.env.JWT_REFRESH_SECRET,
+      JWT_VERIFY_OPTIONS,
+    );
   } catch (jwtErr) {
     const message =
       jwtErr.name === "TokenExpiredError"
         ? "Refresh token has expired. Please log in again."
         : "Refresh token is invalid.";
     const err = new Error(message);
+    err.statusCode = 401;
+    throw err;
+  }
+
+  if (!decoded?.sub) {
+    const err = new Error("Refresh token is invalid.");
     err.statusCode = 401;
     throw err;
   }
@@ -217,7 +251,7 @@ async function refresh(incomingRefreshToken) {
   }
 
   // Step 3: Compare the incoming token against the stored hash
-  const isValid = await bcrypt.compare(incomingRefreshToken, user.refreshToken);
+  const isValid = await verifyStoredRefreshToken(incomingRefreshToken, user.refreshToken);
   if (!isValid) {
     // Token reuse detected — wipe all sessions immediately
     await UserModel.findByIdAndUpdate(user._id, { refreshToken: null });
@@ -252,5 +286,9 @@ async function logout(userId) {
 }
 
 export {
-register, login, refresh, logout
+register,
+login,
+refresh,
+logout,
+hashRefreshToken,
 };

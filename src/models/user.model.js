@@ -6,7 +6,7 @@
  *   - The password field is excluded from all queries by default (select: false).
  *     To read it: UserModel.findOne({...}).select('+password')
  *   - comparePassword() is an instance method — controllers never call bcrypt directly.
- *   - refreshToken is stored as a bcrypt hash — a DB leak cannot forge sessions.
+ *   - refreshToken is stored as a keyed hash — a DB leak cannot forge sessions.
  *
  * FIX: Password minlength is now driven by MIN_PASSWORD_LENGTH env var (default 6).
  *   The original hardcoded 8 blocked all testing with short passwords like "123456".
@@ -76,7 +76,7 @@ const UserSchema = new Schema(
       default: 'user',
     },
 
-    // Stored as a bcrypt hash, not the raw token.
+    // Stored as a keyed hash, not the raw token.
     // select:false keeps it out of all default queries.
     refreshToken: {
       type: String,

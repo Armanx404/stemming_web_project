@@ -27,6 +27,9 @@ import {
 } from '../services/auth.service.js';
 import { successResponse, errorResponse } from '../utils/response.js';
 
+const DEFAULT_REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
+
 // ─── Cookie Config ────────────────────────────────────────────────────────────
 
 /**
@@ -34,13 +37,81 @@ import { successResponse, errorResponse } from '../utils/response.js';
  * Centralised cookie config so all handlers stay in sync.
  * secure:true is automatically applied in production.
  */
-function refreshCookieOptions() {
+function getRefreshCookieMaxAge() {
+  const configuredValue = Number(process.env.JWT_REFRESH_COOKIE_MAX_AGE_MS);
+  return Number.isFinite(configuredValue) && configuredValue > 0
+    ? configuredValue
+    : DEFAULT_REFRESH_COOKIE_MAX_AGE_MS;
+}
+
+function refreshCookieOptions({
+  nodeEnv = process.env.NODE_ENV,
+  maxAge = getRefreshCookieMaxAge(),
+} = {}) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: nodeEnv === 'production',
     sameSite: 'strict',
-    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days in ms
+    maxAge,
   };
+}
+
+function clearRefreshCookieOptions({ nodeEnv = process.env.NODE_ENV } = {}) {
+  return {
+    httpOnly: true,
+    secure: nodeEnv === 'production',
+    sameSite: 'strict',
+  };
+}
+
+function isNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function validateRegistrationPayload(body = {}) {
+  const { username, email, password } = body;
+
+  if (!isNonEmptyString(username) || !isNonEmptyString(email) || !isNonEmptyString(password)) {
+    return { error: 'username, email, and password are all required.' };
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!EMAIL_PATTERN.test(normalizedEmail)) {
+    return { error: 'A valid email address is required.' };
+  }
+
+  return {
+    value: {
+      username: username.trim(),
+      email: normalizedEmail,
+      password,
+    },
+  };
+}
+
+function validateLoginPayload(body = {}) {
+  const { email, password } = body;
+
+  if (!isNonEmptyString(email) || !isNonEmptyString(password)) {
+    return { error: 'Email and password are required.' };
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!EMAIL_PATTERN.test(normalizedEmail)) {
+    return { error: 'A valid email address is required.' };
+  }
+
+  return {
+    value: {
+      email: normalizedEmail,
+      password,
+    },
+  };
+}
+
+function getRefreshTokenFromRequest(req) {
+  const token = req.cookies?.refreshToken || req.body?.refreshToken;
+  return isNonEmptyString(token) ? token.trim() : null;
 }
 
 // ─── POST /auth/register ──────────────────────────────────────────────────────
@@ -52,13 +123,15 @@ function refreshCookieOptions() {
  * Returns: accessToken in JSON body + refreshToken in httpOnly cookie
  */
 const register = async (req, res) => {
-  const { username, email, password } = req.body;
+  const { value, error } = validateRegistrationPayload(req.body);
 
-  if (!username || !email || !password) {
+  if (error) {
     return res
       .status(StatusCodes.BAD_REQUEST)
-      .json(errorResponse('username, email, and password are all required.'));
+      .json(errorResponse(error));
   }
+
+  const { username, email, password } = value;
 
   const { user, accessToken, refreshToken } = await registerService({
     username: username.trim(),
@@ -85,13 +158,15 @@ const register = async (req, res) => {
  * both "user not found" and "wrong password" — prevents user enumeration.
  */
 const login = async (req, res) => {
-  const { email, password } = req.body;
+  const { value, error } = validateLoginPayload(req.body);
 
-  if (!email || !password) {
+  if (error) {
     return res
       .status(StatusCodes.BAD_REQUEST)
-      .json(errorResponse('Email and password are required.'));
+      .json(errorResponse(error));
   }
+
+  const { email, password } = value;
 
   const { user, accessToken, refreshToken } = await loginService({
     email: email.trim().toLowerCase(),
@@ -118,7 +193,7 @@ const login = async (req, res) => {
  * Old refresh token presented again → all sessions wiped (reuse detection).
  */
 const refresh = async (req, res) => {
-  const token = req.cookies?.refreshToken || req.body?.refreshToken;
+  const token = getRefreshTokenFromRequest(req);
 
   if (!token) {
     return res
@@ -146,11 +221,7 @@ const refresh = async (req, res) => {
 const logout = async (req, res) => {
   await logoutService(req.user.id);
 
-  res.clearCookie('refreshToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-  });
+  res.clearCookie('refreshToken', clearRefreshCookieOptions());
 
   return res
     .status(StatusCodes.OK)
@@ -172,5 +243,11 @@ const me = async (req, res) => {
 };
 
 export {
-register, login, refresh, logout, me
+register,
+login,
+refresh,
+logout,
+me,
+refreshCookieOptions,
+clearRefreshCookieOptions,
 };

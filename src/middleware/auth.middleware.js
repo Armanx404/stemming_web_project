@@ -20,6 +20,8 @@ import { StatusCodes } from 'http-status-codes';
 import UserModel from '../models/user.model.js';
 import { errorResponse } from '../utils/response.js';
 
+const JWT_VERIFY_OPTIONS = { algorithms: ['HS256'] };
+
 // ─── protect ──────────────────────────────────────────────────────────────────
 
 /**
@@ -41,13 +43,19 @@ const protect = async (req, res, next) => {
 
   let decoded;
   try {
-    decoded = jwt.verify(token, process.env.JWT_SECRET);
+    decoded = jwt.verify(token, process.env.JWT_SECRET, JWT_VERIFY_OPTIONS);
   } catch (err) {
     const message =
       err.name === 'TokenExpiredError'
         ? 'Access token has expired. Please refresh your session.'
         : 'Access token is invalid.';
     return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse(message));
+  }
+
+  if (!decoded?.sub) {
+    return res
+      .status(StatusCodes.UNAUTHORIZED)
+      .json(errorResponse('Access token is invalid.'));
   }
 
   // Fetch the user fresh on each request so deactivation takes immediate effect.

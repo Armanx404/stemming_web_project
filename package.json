@@ -7,7 +7,8 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "worker": "node src/workers/video.worker.js",
-    "dev:worker": "nodemon src/workers/video.worker.js"
+    "dev:worker": "nodemon src/workers/video.worker.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.575.0",
@@ -33,7 +34,8 @@
     "rate-limit-redis": "^4.2.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.0"
+    "nodemon": "^3.1.0",
+    "supertest": "^7.2.2"
   },
   "type": "module"
 }

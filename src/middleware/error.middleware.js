@@ -17,6 +17,33 @@ import { StatusCodes } from 'http-status-codes';
 import logger from '../utils/logger.js';
 import { errorResponse } from '../utils/response.js';
 
+function shouldRedactKey(key) {
+  const normalizedKey = String(key).toLowerCase();
+  return (
+    normalizedKey.includes('password') ||
+    normalizedKey.includes('token') ||
+    normalizedKey.includes('secret') ||
+    normalizedKey === 'authorization' ||
+    normalizedKey === 'cookie'
+  );
+}
+
+function sanitizeForLog(value, depth = 0) {
+  if (depth > 5) return '[MaxDepth]';
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForLog(item, depth + 1));
+  }
+  if (typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entryValue]) => [
+      key,
+      shouldRedactKey(key) ? '[REDACTED]' : sanitizeForLog(entryValue, depth + 1),
+    ])
+  );
+}
+
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 
 /**
@@ -46,7 +73,7 @@ const notFoundHandler = (req, res) => {
 const globalErrorHandler = (err, req, res, _next) => {
   logger.error(`[${req.method}] ${req.originalUrl} — ${err.message}`, {
     stack: err.stack,
-    body: req.body,
+    body: sanitizeForLog(req.body),
   });
 
   // ── Mongoose: invalid ObjectId ─────────────────────────────────────────────
@@ -93,5 +120,7 @@ const globalErrorHandler = (err, req, res, _next) => {
 };
 
 export {
-notFoundHandler, globalErrorHandler
+notFoundHandler,
+globalErrorHandler,
+sanitizeForLog,
 };
