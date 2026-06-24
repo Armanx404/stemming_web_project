@@ -70,8 +70,8 @@ const UserSchema = new Schema(
     role: {
       type: String,
       enum: {
-        values: ['user', 'admin'],
-        message: 'Role must be either "user" or "admin"',
+        values: ['user', 'moderator', 'admin', 'superadmin'],
+        message: 'Role must be one of: user, moderator, admin, superadmin',
       },
       default: 'user',
     },

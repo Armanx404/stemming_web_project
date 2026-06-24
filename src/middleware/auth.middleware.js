@@ -21,6 +21,7 @@ import UserModel from '../models/user.model.js';
 import { errorResponse } from '../utils/response.js';
 
 const JWT_VERIFY_OPTIONS = { algorithms: ['HS256'] };
+const ADMIN_ROLES = new Set(['admin', 'superadmin']);
 
 // ─── protect ──────────────────────────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ const protect = async (req, res, next) => {
  * Blocks non-admin users from accessing the route.
  */
 const requireAdmin = (req, res, next) => {
-  if (req.user?.role !== 'admin') {
+  if (!ADMIN_ROLES.has(req.user?.role)) {
     return res
       .status(StatusCodes.FORBIDDEN)
       .json(errorResponse('Administrator access required.'));
@@ -116,7 +117,7 @@ const requireOwner = (Model, ownerField = 'uploadedBy') => async (req, res, next
   }
 
   // Admins can modify any resource
-  if (req.user.role === 'admin') {
+  if (ADMIN_ROLES.has(req.user.role)) {
     req.resource = resource;
     return next();
   }

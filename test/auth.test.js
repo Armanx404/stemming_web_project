@@ -172,6 +172,28 @@ test('registration rejects invalid field types', async () => {
   assert.match(res.body.message, /required/i);
 });
 
+test('registration ignores public role assignment', async () => {
+  for (const role of ['admin', 'moderator', 'superadmin']) {
+    const label = `roleignored_${role}`;
+    const email = emailFor(label);
+    const res = await request(app)
+      .post('/auth/register')
+      .send({
+        username: usernameFor(label),
+        email,
+        password: VALID_PASSWORD,
+        role,
+      });
+
+    assert.equal(res.status, 201, res.text);
+    assert.equal(res.body.success, true);
+    assert.equal(res.body.data.user.role, 'user');
+
+    const dbUser = await UserModel.findOne({ email });
+    assert.equal(dbUser.role, 'user');
+  }
+});
+
 test('duplicate email registration returns conflict', async () => {
   const account = await registerUser('dupe');
 
@@ -423,9 +445,11 @@ test('development and production refresh-cookie options are secure', () => {
   });
 });
 
-test('role and admin authorization allows admins and rejects regular users', async () => {
+test('role and admin authorization allows administrators and rejects non-admin roles', async () => {
   const regularUser = await registerUser('regular');
   const adminEmail = emailFor('admin');
+  const superadminEmail = emailFor('superadmin');
+  const moderatorEmail = emailFor('moderator');
 
   await UserModel.create({
     username: usernameFor('admin'),
@@ -433,8 +457,22 @@ test('role and admin authorization allows admins and rejects regular users', asy
     password: VALID_PASSWORD,
     role: 'admin',
   });
+  await UserModel.create({
+    username: usernameFor('superadmin'),
+    email: superadminEmail,
+    password: VALID_PASSWORD,
+    role: 'superadmin',
+  });
+  await UserModel.create({
+    username: usernameFor('moderator'),
+    email: moderatorEmail,
+    password: VALID_PASSWORD,
+    role: 'moderator',
+  });
 
   const adminLogin = await loginUser(adminEmail, VALID_PASSWORD);
+  const superadminLogin = await loginUser(superadminEmail, VALID_PASSWORD);
+  const moderatorLogin = await loginUser(moderatorEmail, VALID_PASSWORD);
 
   const adminOnlyApp = express();
   adminOnlyApp.get('/admin-only', protect, requireAdmin, (_req, res) => {
@@ -448,10 +486,24 @@ test('role and admin authorization allows admins and rejects regular users', asy
   assert.equal(regularRes.status, 403, regularRes.text);
   assert.equal(regularRes.body.success, false);
 
+  const moderatorRes = await request(adminOnlyApp)
+    .get('/admin-only')
+    .set('Authorization', `Bearer ${moderatorLogin.accessToken}`);
+
+  assert.equal(moderatorRes.status, 403, moderatorRes.text);
+  assert.equal(moderatorRes.body.success, false);
+
   const adminRes = await request(adminOnlyApp)
     .get('/admin-only')
     .set('Authorization', `Bearer ${adminLogin.accessToken}`);
 
   assert.equal(adminRes.status, 200, adminRes.text);
   assert.equal(adminRes.body.success, true);
+
+  const superadminRes = await request(adminOnlyApp)
+    .get('/admin-only')
+    .set('Authorization', `Bearer ${superadminLogin.accessToken}`);
+
+  assert.equal(superadminRes.status, 200, superadminRes.text);
+  assert.equal(superadminRes.body.success, true);
 });
