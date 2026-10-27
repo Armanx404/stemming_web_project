@@ -21,6 +21,7 @@ import rateLimit from 'express-rate-limit';
 import { createRedisRateLimitStore } from './config/redis.config.js';
 import videoRoutes from './routes/video.routes.js';
 import authRoutes from './routes/auth.routes.js';
+import adminRoutes from './routes/admin.routes.js';
 import searchRoutes from './routes/search.routes.js';
 import healthRoutes from './routes/health.routes.js';
 import { notFoundHandler, globalErrorHandler } from './middleware/error.middleware.js';
@@ -70,6 +71,7 @@ app.use(morgan(morganFormat, { stream: { write: (msg) => logger.http(msg.trim())
 const API_PREFIX = process.env.API_PREFIX || '/api';
 
 app.use('/auth',              authRoutes);
+app.use(`${API_PREFIX}/admin`, adminRoutes);
 app.use(`${API_PREFIX}/videos`, videoRoutes);
 app.use(`${API_PREFIX}/search`, searchRoutes);
 app.use(`${API_PREFIX}/health`, healthRoutes);
@@ -84,6 +86,7 @@ app.get('/', (_req, res) => {
     timestamp: new Date().toISOString(),
     endpoints: {
       auth:         { register: 'POST /auth/register', login: 'POST /auth/login' },
+      admin:        `${API_PREFIX}/admin`,
       videos:       `${API_PREFIX}/videos`,
       search:       `GET ${API_PREFIX}/search?q=<term>`,
       health:       `GET ${API_PREFIX}/health`,
